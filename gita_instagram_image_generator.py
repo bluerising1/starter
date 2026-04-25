@@ -337,15 +337,7 @@ def main() -> None:
             print(f"[DRY RUN] Prompt preview: {prompt[:400]}...\n")
             continue
 
-        try:
-            image_bytes = generate_image(
-                client=client, model=args.model, prompt=prompt, size=args.size
-            )
-        except RuntimeError as exc:
-            print(f"Image generation failed for Chapter {chapter.chapter_number}: {chapter.title}")
-            print(f"Reason: {exc}")
-            print("Tip: run with --dry-run to validate prompts without API usage.")
-            raise SystemExit(1) from None
+        image_bytes = generate_image(client=client, model=args.model, prompt=prompt, size=args.size)
 
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         chapter_slug = slugify(chapter.title)
