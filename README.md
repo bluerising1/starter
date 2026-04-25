@@ -64,4 +64,7 @@ Optional:
 python gita_instagram_image_generator.py --force-chapter 11
 python gita_instagram_image_generator.py --model gpt-image-1 --size 1024x1280
 python gita_instagram_image_generator.py --posts-per-run 3
+python gita_instagram_image_generator.py --dry-run --posts-per-run 3
 ```
+
+If generation fails with billing/quota errors, the script now prints a clear message. In that case, check your OpenAI billing dashboard and increase available budget/quota before running again.

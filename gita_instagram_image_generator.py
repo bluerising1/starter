@@ -194,11 +194,24 @@ def build_prompt(chapter: Chapter) -> str:
 
 
 def generate_image(client: Any, model: str, prompt: str, size: str) -> bytes:
-    response = client.images.generate(
-        model=model,
-        prompt=prompt,
-        size=size,
-    )
+    try:
+        response = client.images.generate(
+            model=model,
+            prompt=prompt,
+            size=size,
+        )
+    except Exception as exc:
+        error_text = str(exc)
+        normalized = error_text.lower()
+        if "billing_hard_limit_reached" in normalized or "billing hard limit" in normalized:
+            raise RuntimeError(
+                "OpenAI billing hard limit reached. Increase your API billing limit or wait for reset."
+            ) from exc
+        if "insufficient_quota" in normalized or "quota" in normalized:
+            raise RuntimeError(
+                "OpenAI API quota exceeded. Check plan and usage limits in your OpenAI billing dashboard."
+            ) from exc
+        raise RuntimeError(f"OpenAI image generation failed: {error_text}") from exc
 
     if not response.data:
         raise RuntimeError("Image API response had no data.")
@@ -258,24 +271,31 @@ def parse_args() -> argparse.Namespace:
         default=3,
         help="Number of chapter posts to generate in one run (default: 3).",
     )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Do not call API; print planned chapters and prompt previews only.",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
 
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise SystemExit("OPENAI_API_KEY is not set. Export it and run again.")
     if args.posts_per_run < 1:
         raise SystemExit("--posts-per-run must be >= 1.")
 
-    try:
-        from openai import OpenAI
-    except ModuleNotFoundError as exc:
-        raise SystemExit(
-            "openai package is not installed. Install with: pip install openai"
-        ) from exc
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not args.dry_run and not api_key:
+        raise SystemExit("OPENAI_API_KEY is not set. Export it and run again.")
+
+    if not args.dry_run:
+        try:
+            from openai import OpenAI
+        except ModuleNotFoundError as exc:
+            raise SystemExit(
+                "openai package is not installed. Install with: pip install openai"
+            ) from exc
 
     chapters_path = Path(args.chapters_file)
     state_path = Path(args.state_file)
@@ -291,7 +311,7 @@ def main() -> None:
     state = load_state(state_path)
     next_idx = int(state.get("next_chapter_index", 0))
 
-    client = OpenAI(api_key=api_key)
+    client = OpenAI(api_key=api_key) if not args.dry_run else None
 
     if args.force_chapter is not None:
         matching = [c for c in chapters if c.chapter_number == args.force_chapter]
@@ -312,9 +332,12 @@ def main() -> None:
 
     for chapter in selected_chapters:
         prompt = build_prompt(chapter)
-        image_bytes = generate_image(
-            client=client, model=args.model, prompt=prompt, size=args.size
-        )
+        if args.dry_run:
+            print(f"[DRY RUN] Chapter {chapter.chapter_number}: {chapter.title}")
+            print(f"[DRY RUN] Prompt preview: {prompt[:400]}...\n")
+            continue
+
+        image_bytes = generate_image(client=client, model=args.model, prompt=prompt, size=args.size)
 
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         chapter_slug = slugify(chapter.title)
@@ -337,7 +360,7 @@ def main() -> None:
         }
         write_metadata(metadata_path, metadata)
 
-        if update_sequence:
+        if update_sequence and not args.dry_run:
             state.setdefault("history", []).append(
                 {
                     "chapter_number": chapter.chapter_number,
@@ -352,7 +375,7 @@ def main() -> None:
         print(f"Image saved to: {image_path}")
         print(f"Metadata saved to: {metadata_path}")
 
-    if update_sequence:
+    if update_sequence and not args.dry_run:
         state["next_chapter_index"] = next_idx + len(selected_chapters)
         save_state(state_path, state)
         print(f"Next chapter index: {state['next_chapter_index']}")
