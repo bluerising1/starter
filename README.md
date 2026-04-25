@@ -42,3 +42,29 @@ In your output directory:
   - `Spending by Category`
   - `Necessity Split`
 - `spending_chart.png`
+
+## Bhagavad Gita Instagram image generator
+A chapter-wise image generator that calls OpenAI Images API and keeps progression state between runs.
+
+### Install
+```bash
+pip install openai
+```
+
+### Run
+```bash
+export OPENAI_API_KEY="your_api_key"
+python gita_instagram_image_generator.py
+```
+
+Each run generates the **next 3 chapter posts** by default and saves files to `output/gita_images/` plus state in `output/gita_state.json`.
+
+Optional:
+```bash
+python gita_instagram_image_generator.py --force-chapter 11
+python gita_instagram_image_generator.py --model gpt-image-1 --size 1024x1280
+python gita_instagram_image_generator.py --posts-per-run 3
+python gita_instagram_image_generator.py --dry-run --posts-per-run 3
+```
+
+If generation fails with billing/quota errors, the script now prints a clear message. In that case, check your OpenAI billing dashboard and increase available budget/quota before running again.
